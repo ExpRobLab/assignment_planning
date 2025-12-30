@@ -1,0 +1,8 @@
+# Goal
+int32 marker_id       # the ID of the marker to center on
+---
+# Result
+bool success
+---
+# Feedback
+float32 error_angle   # Current alignment error

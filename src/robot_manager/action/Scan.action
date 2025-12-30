@@ -1,0 +1,8 @@
+# Goal
+float32 target_angle  # Amount to rotate (e.g., 6.28 for 360 degrees)
+---
+# Result
+bool success
+---
+# Feedback
+float32 current_angle

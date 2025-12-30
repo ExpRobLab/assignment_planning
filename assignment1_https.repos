@@ -1,0 +1,21 @@
+repositories:
+  assignment1:
+    type: git
+    url: https://github.com/ExpRobLab/assignment1.git
+    version: main
+  robot_manager:
+    type: git
+    url: https://github.com/ExpRobLab/robot_manager.git
+    version: main
+  worlds_manager:
+    type: git
+    url: https://github.com/ExpRobLab/world_manager.git
+    version: main
+  rosbot_ros:
+    type: git
+    url: https://github.com/husarion/rosbot_ros.git
+    version: jazzy
+  ros_aruco_opencv:
+    type: git
+    url: https://github.com/fictionlab/ros_aruco_opencv.git
+    version: ros2
