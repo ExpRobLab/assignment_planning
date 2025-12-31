@@ -5,9 +5,12 @@
     wp1 wp2 wp3 wp4 - waypoint
 )
 (:init
-    (pipeline_ready mogi_bot)
+  (mode_explore)
 )
 (:goal (and
-    (pipeline_captured mogi_bot)
+  (captured w1)
+  (captured w2)
+  (captured w3)
+  (captured w4)
 ))
 )
