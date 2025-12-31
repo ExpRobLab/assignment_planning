@@ -1,4 +1,4 @@
-(define (domain nagivation)
+(define (domain navigation)
 (:requirements :strips :typing :adl :fluents :durative-actions)
 
 ;; Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
