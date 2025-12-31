@@ -3,6 +3,7 @@
 
 (:types
     robot
+    waypoint
 )
 
 (:predicates
@@ -11,11 +12,8 @@
     (pipeline_captured ?r - robot)
 )
 
-(:functions
-)
-
-(:durative-action explore
-    :parameters (?r - robot)
+(:durative-action navigate_and_rotate
+    :parameters (?r - robot ?wp - waypoint)
     :duration ( = ?duration 5)
     :condition (and
         (at start (pipeline_ready ?r))
@@ -26,8 +24,8 @@
     )
 )
 
-(:durative-action capture
-    :parameters (?r - robot)
+(:durative-action navigate_and_capture
+    :parameters (?r - robot ?wp - waypoint)
     :duration ( = ?duration 5)
     :condition (and
         (at start (pipeline_explored ?r))
