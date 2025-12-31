@@ -1,4 +1,4 @@
-(define (problem example_problem) (:domain example2)
+(define (problem navigation_problem) (:domain navigation)
 (:objects
     robot1 - robot
     marker1 marker2 marker3 marker4 marker0 - marker
