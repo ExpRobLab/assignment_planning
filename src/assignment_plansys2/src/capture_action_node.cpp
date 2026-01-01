@@ -6,10 +6,12 @@
 #include "cv_bridge/cv_bridge.h"
 #include "plansys2_executor/ActionExecutorClient.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "lifecycle_msgs/msg/transition.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "robot_manager/action/center.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/image_encodings.hpp"
 #include <cstdlib>
 #include <filesystem>
 
@@ -19,7 +21,7 @@ class CaptureAction : public plansys2::ActionExecutorClient
 {
 public:
   CaptureAction()
-  : plansys2::ActionExecutorClient("capture", 500ms)
+  : plansys2::ActionExecutorClient("move_to_photograph", 500ms)
   {
     nav_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(this, "navigate_to_pose");
     center_client_ = rclcpp_action::create_client<robot_manager::action::Center>(this, "center_on_marker");
@@ -33,31 +35,54 @@ public:
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_activate(const rclcpp_lifecycle::State & previous_state)
   {
-    // Load markers from file
-    std::ifstream file("/tmp/detected_markers.csv");
-    markers_.clear();
-    long id; char comma; double x, y;
-    while(file >> id >> comma >> x >> comma >> y) {
-        markers_.push_back({id, {x, y}});
+    // Cache current dispatch arguments (move_to_photograph ?r ?to ?from)
+    auto args = get_arguments();
+    if (args.size() >= 3) {
+      robot_ = args[0];
+      to_marker_ = args[1];
+      from_marker_ = args[2];
+    } else {
+      robot_.clear();
+      to_marker_.clear();
+      from_marker_.clear();
     }
-    // Sort by ID
-    std::sort(markers_.begin(), markers_.end());
-    
-    current_idx_ = 0;
+
+    target_marker_id_ = marker_name_to_id(to_marker_);
+
+    // Load marker poses from file (written during move_to_detect)
+    marker_poses_.clear();
+    std::ifstream file("/tmp/detected_markers.csv");
+    long id; char comma; double x, y;
+    while (file >> id >> comma >> x >> comma >> y) {
+      marker_poses_[id] = {x, y};
+    }
+
+    has_target_pose_ = (target_marker_id_ >= 0 && marker_poses_.find(target_marker_id_) != marker_poses_.end());
+
     step_ = 0;
+    nav_goal_sent_ = false;
+    nav_done_ = false;
+    center_goal_sent_ = false;
+    center_done_ = false;
+    center_success_ = false;
+
     return plansys2::ActionExecutorClient::on_activate(previous_state);
   }
 
   void do_work()
   {
-    if (current_idx_ >= markers_.size()) {
-        finish(true, 1.0, "All Captured");
-        return;
+    if (to_marker_.empty() || target_marker_id_ < 0) {
+      finish(false, 1.0, "Missing/invalid action parameters");
+      return;
+    }
+    if (!has_target_pose_) {
+      finish(false, 1.0, "No stored pose for target marker");
+      return;
     }
 
-    long mid = markers_[current_idx_].first;
-    double mx = markers_[current_idx_].second.first;
-    double my = markers_[current_idx_].second.second;
+    long mid = target_marker_id_;
+    double mx = marker_poses_[target_marker_id_].first;
+    double my = marker_poses_[target_marker_id_].second;
 
     if (step_ == 0) { // Navigate
         if (!nav_goal_sent_) {
@@ -94,8 +119,9 @@ public:
         if (center_done_) {
             center_goal_sent_ = false;
             if (center_success_) step_ = 2; // Capture
-            else { 
-                current_idx_++; step_ = 0; // Skip if centering failed
+            else {
+                finish(false, 1.0, "Centering failed");
+                return;
             }
         }
     }
@@ -127,18 +153,36 @@ public:
                 }
             } catch(...) {}
         }
-        current_idx_++;
-        step_ = 0;
+        finish(true, 1.0, "Photograph captured");
+        return;
     }
   }
 
 private:
   int step_ = 0;
-  size_t current_idx_ = 0;
   bool nav_goal_sent_ = false; bool nav_done_ = false;
   bool center_goal_sent_ = false; bool center_done_ = false; bool center_success_ = false;
-  
-  std::vector<std::pair<long, std::pair<double, double>>> markers_;
+
+  std::string robot_;
+  std::string to_marker_;
+  std::string from_marker_;
+  long target_marker_id_ = -1;
+  bool has_target_pose_ = false;
+
+  std::map<long, std::pair<double, double>> marker_poses_;
+
+  static long marker_name_to_id(const std::string & name)
+  {
+    // Expected format: marker<integer>
+    if (name.rfind("marker", 0) != 0 || name.size() <= 6) {
+      return -1;
+    }
+    try {
+      return std::stol(name.substr(6));
+    } catch (...) {
+      return -1;
+    }
+  }
   
   rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr nav_client_;
   rclcpp_action::Client<robot_manager::action::Center>::SharedPtr center_client_;
@@ -151,7 +195,6 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<CaptureAction>();
-  node->set_parameter(rclcpp::Parameter("action_name", "capture"));
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_CONFIGURE);
   rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();
