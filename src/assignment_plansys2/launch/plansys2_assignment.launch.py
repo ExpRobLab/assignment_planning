@@ -24,24 +24,33 @@ def generate_launch_description():
     )
 
     # Action Executors
-    explore_node = Node(
+    move_to_detect_node = Node(
         package=pkg_name,
         executable='explore_action_node',
-        name='explore_action_node',
+        name='move_to_detect_executor',
         output='screen',
         parameters=[{'use_sim_time': True}]
     )
 
-    capture_node = Node(
+    change_state_node = Node(
+        package=pkg_name,
+        executable='change_state_action_node',
+        name='change_state_executor',
+        output='screen',
+        parameters=[{'use_sim_time': True}]
+    )
+
+    move_to_photograph_node = Node(
         package=pkg_name,
         executable='capture_action_node',
-        name='capture_action_node',
+        name='move_to_photograph_executor',
         output='screen',
         parameters=[{'use_sim_time': True}]
     )
 
     return LaunchDescription([
         plansys2_cmd,
-        explore_node,
-        capture_node
+        move_to_detect_node,
+        change_state_node,
+        move_to_photograph_node
     ])
