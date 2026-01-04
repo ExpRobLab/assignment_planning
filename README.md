@@ -1,7 +1,7 @@
 # Task Planning with PlanSys2: ArUco marker search & capture in Gazebo (ROS 2)
 
 **Experimental Robotics Laboratory — Planning Assignment (PlanSys2)**  
-Authors: Gian Marco Balia, Christian Negri Ravera, Francesca Amato, Arian Tavousi, Milad Rabiei
+Authors: Gian Marco Balia, Christian Negri Ravera, Francesca Amato, Filippo Salterini, Arian Tavousi, Milad Rabiei
 
 **Short description:**  
 We control a mobile robot in Gazebo to search an environment until all ArUco markers are found and then visit and “capture” each marker in ascending ID order. The behavior is modeled in PDDL and executed using PlanSys2: a planner generates a valid sequence of actions (e.g., explore → capture), and an executor runs it by activating our ROS 2 “action performer” nodes. Captures are produced by annotating the camera image and saving the final frames to disk, while also publishing the annotated image on a topic.
