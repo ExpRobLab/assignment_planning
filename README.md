@@ -29,7 +29,7 @@ To make the search systematic (and avoid spinning forever), we define 4 explorat
 - `wp3 = ( 6.0, -6.0)`
 - `wp4 = ( 6.0,  6.0)`
 
-**High-level idea:** (need to change based on our final implement, put the first one as place holder)
+**High-level idea:**
 
 1) **Search phase**  
    The robot navigates among the waypoints until it has detected all 4 markers at least once.
@@ -81,7 +81,7 @@ PlanSys2 splits the planning pipeline into components so instead of hard-coding 
 - `(pipeline_explored ?r)` — "explore" phase completed
 - `(pipeline_captured ?r)` — final annotated “capture” completed
 
-### 4.3 Actions (typical split)
+### 4.3 Actions
 
 1) `explore(?r)`  
    Durative action. Start exploring the waypoints:
@@ -94,7 +94,7 @@ PlanSys2 splits the planning pipeline into components so instead of hard-coding 
    - save image to disk   
 ---
 
-## 5) Nodes and runtime logic (plansys yes or no?)
+## 5) Nodes and runtime logic
 
 ### 5.1 PlanSys2 orchestration
 - Domain Expert loads the PDDL domain (actions, predicates, types).
@@ -119,7 +119,7 @@ This project implements two PDDL actions, each backed by a ROS 2 performer node:
 
 ---
 
-## 6) Topics, TF, and outputs (needs double checking)
+## 6) Topics, TF, and outputs
 
 ### 6.1 Subscribed topics
 - `/camera/image/compressed`
@@ -128,7 +128,7 @@ This project implements two PDDL actions, each backed by a ROS 2 performer node:
 
 ### 6.2 Published topics
 - `/Nav2`
-- `/final_marker_image` (annotated image output)
+- `/final_marker_image`
 
 ### 6.3 Frames
 - `odom`
@@ -137,7 +137,7 @@ This project implements two PDDL actions, each backed by a ROS 2 performer node:
 - `marker_<id>`
 
 ### 6.4 Saved artifacts
-- `output/marker_<id>.png` (final annotated captures)
+- `output/marker_<id>.png`
 
 ---
 
@@ -154,7 +154,7 @@ This project implements two PDDL actions, each backed by a ROS 2 performer node:
 
 ---
 
-## 8) Build & run (Milad vers)
+## 8) Build & run
 
 ### 8.1 Build workspace
 ```bash
@@ -184,7 +184,7 @@ ros2 run plansys2_terminal plansys2_terminal
 ```
 In the second terminal, run `get plan` in order to generate a plan and then run `run` for robot to start.
 
-## 9) Results (place holder)
+## 9) Results
 ### 9.1 Output images
 
 ### 9.2 RQT graph / node graph
