@@ -1,205 +1,192 @@
-# Aruco detection and angular visual servoing in Gazebo & ROS 2
+# Task Planning with PlanSys2: ArUco marker search & capture in Gazebo (ROS 2)
 
-**Assignment 1 — Experimental Robotics Lab**  
+**Experimental Robotics Laboratory — Planning Assignment (PlanSys2)**  
 Authors: Gian Marco Balia, Christian Negri Ravera, Francesca Amato, Arian Tavousi, Milad Rabiei
 
 **Short description:**  
-Spawn a robot in a Gazebo world with 5 ArUco markers placed in a circle. The system detects all markers, then, in ascending order of marker ID, rotates the robot to center each marker in the image (visual servoing phase), publishes an annotated image (with a circle around the marker) on a topic and saves the final frames. 
+We control a mobile robot in Gazebo to search an environment until all ArUco markers are found and then visit and “capture” each marker in ascending ID order. The behavior is modeled in PDDL and executed using PlanSys2: a planner generates a valid sequence of actions (e.g., explore → capture), and an executor runs it by activating our ROS 2 “action performer” nodes. Captures are produced by annotating the camera image and saving the final frames to disk, while also publishing the annotated image on a topic.
 
 <table>
   <tr>
-    <td>Gazebo Run</td>
-     <td>Rviz panel</td>
+    <td><b>Gazebo </b></td>
+    <td><b>PlanSys2 </b></td>
   </tr>
   <tr>
-    <td><img src="gazebo.png" width=533 height=300></td>
-    <td><img src="rviz.png" width=533 height=300></td>
+    <td><img src="docs/gazebo.png" width="533" height="300"></td>
+    <td><img src="docs/plan.png" width="533" height="300"></td>
   </tr>
- </table>
----
-
-# Description and features
-- Gazebo simulation with a robot and 5 ArUco-marked boxes placed in a circular arrangement.
-- ArUco detection pipeline (via `ros_aruco_opencv` package).
-- `aruco_detections.py` node:
-  - searches for all 5 marker IDs are detected and records their transformations w.r.t the world,
-  - sorts IDs and selects the lowest remaining ID as target,
-  - rotates the robot to center the marker in the camera image (angular visual servoing),
-  - when centered, draws a circle on the image, publishes it on `/final_marker_image` and saves to disk,
-  - repeats for each marker in ascending order until done.
+</table>
 
 ---
 
-# Prerequisites
+## 1) Main idea
 
-OS: Ubuntu (tested on Ubuntu 22 for ROS 2 Humble and Ubuntu 24 for ROS 2 Jazzy).
+The environment contains 4 ArUco markers placed somewhere in the world.  
+To make the search systematic (and avoid spinning forever), we define 4 exploration waypoints that cover the map corners:
 
-ROS 2: Humble (works) and Jazzy (works) — you may need to clone the correct branch of ros_aruco_opencv for your distro.
+- `wp1 = (-6.0, -6.0)`
+- `wp2 = (-6.0,  6.0)`
+- `wp3 = ( 6.0, -6.0)`
+- `wp4 = ( 6.0,  6.0)`
 
-Gazebo Harmonic is used — confirm the exact Gazebo version matching the ROS 2 distro (although Harmonic works on both ROS versions in this assignment).
+**High-level idea:** (need to change based on our final implement, put the first one as place holder)
 
-Python: system Python3 (version used by ROS 2 distro; typically 3.10+).
+1) **Search phase**  
+   The robot navigates among the waypoints until it has detected all 4 markers at least once.
 
-System tools: colcon, vcstool (python3-vcstool), development libraries for ROS2 packages.
+2) **Capture phase**  
+   Once all markers are known, the robot goes to each marker in ascending marker ID, centers it, then publishes + saves the annotated image.
 
-# Installation (bundle workspace)
+This two-phase structure is important because planning becomes clean:
+- Phase 1 goal: “all markers found”
+- Phase 2 goal: “all markers captured (in order)”
 
-This repository is provided as a bundle (multiple packages + repos files). The recommended workflow is to create a workspace and use vcs to import the referenced repositories.
+---
 
-```bash
-# clone the assignment bundle (example)
-git clone https://github.com/ExpRobLab/assignment1_bundle.git
-cd assignment1_bundle
+## 2) Why PlanSys2?
 
-# create a workspace (if not using the repo's workspace layout)
-mkdir -p ~/assignment_ws/src
-cd ~/assignment_ws
+PlanSys2 splits the planning pipeline into components so instead of hard-coding a giant state machine, we:
+- encode the logic in PDDL,
+- let the planner generate a valid action sequence,
+- implement each action as a ROS 2 node.
 
-# import repositories (if the bundle supplies .repos files inside the cloned repo)
-# from within your workspace:
-# vcs import src < path/to/assignment1_https.repos
-# or, if using a local copy of the bundle where the .repos are available:
-vcs import src < ./assignment1_bundle/assignment1_https.repos
+---
 
-# (Alternatively, manually clone the repo contents into ~/assignment_ws/src)
+## 3) Repository structure
 
-# build
-colcon build 
+- `src/`
+  - `assignment_plansys2/`
+    - `pddl/`
+      - `domain.pddl` (PDDL domain)
+      - `problem.pddl` (PDDL problem)
+    - `launch/`
+      - `plansys2_assignment.launch.py` (PlanSys2)
+    - `src/`
+      - `capture_action_node.cpp` (Capture action server)
+      - `explore_action_node.cpp` (Explore action server)
+  - `assignment1/`
+    - `launch/`
+      - `assignment.launch.py` (Gazebo + Robot)
+---
 
-# source the workspace 
-source install/local_setup.bash
+## 4) PDDL model (Milad's code)
 
-# launch the main demo:
-ros2 launch assignment1 assignment.launch.py
-# Or alternatively:
-ros2 launch worlds_manager my_launch_assignment.py
-```
+### 4.1 Types & objects
 
-NOTE: The repo references ros_aruco_opencv external package. Make sure that package is available in your src and that you check-out (or initially clone in vs) a branch compatible with your ROS 2 distro if necessary.
+- `robot` (single robot)
 
-External dependencies (explicit):
+### 4.2 Core predicates
 
-The bundle depends on the ArUco OpenCV ROS package:
+- `(pipeline_ready ?r)` — initial start
+- `(pipeline_explored ?r)` — "explore" phase completed
+- `(pipeline_captured ?r)` — final annotated “capture” completed
 
-https://github.com/fictionlab/ros_aruco_opencv.git
+### 4.3 Actions (typical split)
 
-and ROSBot for actual implementation:
+1) `explore(?r)`  
+   Durative action. Start exploring the waypoints:
+   - store each detected marker
 
-https://husarion.com/manuals/rosbot/
+2) `capture_marker(?r)`  
+   Durative action. Produces the deliverable output:
+   - annotate camera frame
+   - publish annotated images on a topic
+   - save image to disk   
+---
 
-If you import via .repos this will be pulled automatically the Jazzy version. If not, clone it into src/.
+## 5) Nodes and runtime logic (plansys yes or no?)
 
-Important: the package maintainer may have a branch per ROS distro. If using Humble or Jazzy, check out the matching branch (or the aruco_detection branch referenced by your notes).
+### 5.1 PlanSys2 orchestration
+- Domain Expert loads the PDDL domain (actions, predicates, types).
+- Problem Expert*holds the current instances + predicates and the goal.
+- Planner computes a plan from the domain + current problem.
+- Executor dispatches each action in the plan to its corresponding action performer node.
 
-Install apt dependencies commonly required (replace <distro> where necessary; example for Humble):
+### 5.2 Action performers
+This project implements two PDDL actions, each backed by a ROS 2 performer node:
 
-```bash
-sudo apt install ros-humble-ros-base ros-humble-cv-bridge ros-humble-image-transport                  ros-humble-gazebo-ros-pkgs python3-opencv
-```
+- **Explore action performer**:
+  - receives the dispatched action parameters,
+  - navigates to the waypoint and performs the search behavior (rotate while waiting for detections),
+  - updates the Problem Expert with newly discovered marker facts,
+  - returns success/failure to the PlanSys2 executor after performing all the scans.
 
-# Launch files 
+- **Capture action performer**:
+  - receives the dispatched action parameters,
+  - navigates and then aligns to the marker,
+  - “takes the picture” by annotating the camera frame, publishing it, and saving it to disk,
+  - returns success/failure to the PlanSys2 executor.
 
-- `assignment1/launch/assignment.launch.py` — recommended main demo launch (spawns robot, relevant nodes and world).
+---
 
-# Nodes, topics & frames 
+## 6) Topics, TF, and outputs (needs double checking)
 
-## Important nodes
-- **aruco_detection_node** (script: `aruco_detections.py`) — core assignment logic.
-- **aruco_tracker** (from `ros_aruco_opencv`) — publishes detections to `/aruco_detections`.
-
-## Topics (publish / subscribe)
-
-Subscribed:
-
-- `/aruco_detections`
+### 6.1 Subscribed topics
 - `/camera/image/compressed`
+- `/aruco_detections`
+- `/tf`
 
-Published:
+### 6.2 Published topics
+- `/Nav2`
+- `/final_marker_image` (annotated image output)
 
-- `/cmd_vel`
-- `/final_marker_image`
-
-## TF frames used
-
+### 6.3 Frames
 - `odom`
 - `base_footprint`
-- `marker_<ID>`
+- `camera_link`
+- `marker_<id>`
 
-# Detailed explanation of aruco_detections.py logic
+### 6.4 Saved artifacts
+- `output/marker_<id>.png` (final annotated captures)
 
-## Node lifecycle & subscriptions
+---
 
-Creates TF buffer, subscribes to detection and image topics, publishes velocity and images, uses a control loop.
+## 7) Prerequisites
 
-## Detection Phase (and callback)
+- OS: Ubuntu (tested on Ubuntu 22 for ROS 2 Humble and Ubuntu 24 for ROS 2 Jazzy).
+- ROS 2: Humble (works) and Jazzy (works)
+- Gazebo Harmonic is used — confirm the exact Gazebo version matching the ROS 2 distro.
+- Python: system Python3 (version used by ROS 2 distro; typically 3.10+).
+- System tools: colcon, vcstool (python3-vcstool), development libraries for ROS2 packages.
+- OpenCV + cv_bridge (for image annotation)
+- PlanSys2 binaries:
+  - `ros-<distro>-plansys2-*`
 
-- Rotates robot while detecting
-- For each detected marker:
-  - TF lookup `odom -> marker_<id>`
-  - Records transform + ID
-- When all 5 detected:
-  - Sorts IDs, selects lowest, enters "centering" state
+---
 
-## Control loop
+## 8) Build & run (Milad vers)
 
-- Active only in "centering"
-- TF lookup: `base_footprint -> marker_<id>`
-- Compute angle using atan2
-- P-controller for angular velocity
-- When centered:
-  - publish stop
-  - save + publish annotated image
-  - state = "done"
-
-## Image handling & annotation
-
-- Converts compressed → OpenCV
-- Draws circle on marker center
-- Saves PNG
-- Publishes annotated image
-
-# Parameters & tuning
-
-- `Kp = 1.0`
-- `max_angular = 1.0`
-- `threshold = 0.1 rad`
-- `timer: 0.01s`
-
-# Output files, RQt graphs & screenshots
-
-- Output Images
-<table>
-  <tr>
-    <td>Box 1</td>
-    <td>Box 2</td>
-    <td>Box 3</td>
-  </tr>
-  <tr>
-    <td><img src="box1.png" width=533 height=300></td>
-    <td><img src="box2.png" width=533 height=300></td>
-    <td><img src="box3.png" width=533 height=300></td>
-  </tr>
- </table>
-
-- RQT Graph
-<table>
-  <tr>
-    <td><img src="rqt.png" width=533 height=300></td>
-  </tr>
- </table>
-
-# Troubleshooting & tips
-
-Camera topic mismatch:
-
+### 8.1 Build workspace
 ```bash
-ros2 topic list | grep image
+mkdir -p ~/assignment_ws/src
+cd ~/assignment_ws/src
+
+# clone this repository
+git clone https://github.com/ExpRobLab/assignment_planning.git
+
+cd ~/assignment_ws
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --symlink-install
+source install/local_setup.bash
 ```
-
-# CLI snippets
-
+### 8.2 Launch
+**Terminal 1: Gazebo + Robot + Nav2 + Detection + PlanSys2**
 ```bash
-ros2 node list
-ros2 topic echo /aruco_detections
-ros2 topic hz /camera/image/compressed
+source /opt/ros/$ROS_DISTRO/setup.bash
+source ~/assignment_ws/install/setup.bash
+ros2 launch assignment1 assignment.launch.py world:=simple_world.sdf
 ```
+**Terminal 2: Terminal client**
+```bash
+source /opt/ros/$ROS_DISTRO/setup.bash
+source ~/assignment_ws/install/setup.bash
+ros2 run plansys2_terminal plansys2_terminal
+```
+In the second terminal, run `get plan` in order to generate a plan and then run `run` for robot to start.
+
+## 9) Results (place holder)
+### 9.1 Output images
+
+### 9.2 RQT graph / node graph
+
+### 9.3 Video demo
